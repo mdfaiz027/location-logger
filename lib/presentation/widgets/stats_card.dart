@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:location_logger_app/core/constants/app_colors.dart';
-import 'package:location_logger_app/core/constants/app_strings.dart';
 import 'package:location_logger_app/core/utils/distance_utils.dart';
 
 class StatsCard extends StatelessWidget {

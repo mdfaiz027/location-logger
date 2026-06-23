@@ -56,7 +56,7 @@ class LogsNotifier extends StateNotifier<LogsState> {
   }
 }
 
-final logsProvider = StateNotifierProvider<LogsNotifier, LogsState>((ref) {
+final logsProvider = StateNotifierProvider.autoDispose<LogsNotifier, LogsState>((ref) {
   final repository = ref.watch(locationRepositoryProvider);
   final getAll = GetAllLogsUseCase(repository);
   final clearAll = ClearAllLogsUseCase(repository);

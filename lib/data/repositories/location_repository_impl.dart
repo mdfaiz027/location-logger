@@ -40,10 +40,23 @@ void onStart(ServiceInstance service) {
 
     positionSubscription?.cancel();
 
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 10,
-    );
+    // Use platform specific settings for better background performance
+    late LocationSettings locationSettings;
+    if (service is AndroidServiceInstance) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 0, // Set to 0 for better logging during testing
+        intervalDuration: const Duration(seconds: 5),
+      );
+    } else {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 0, // Set to 0 for better logging during testing
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+        allowBackgroundLocationUpdates: true,
+      );
+    }
 
     positionSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) async {

@@ -6,12 +6,15 @@ import 'package:location_logger_app/presentation/providers/location_notifier.dar
 import 'package:location_logger_app/presentation/providers/logs_notifier.dart';
 import 'package:intl/intl.dart';
 
+import '../../domain/entities/location_entity.dart';
+
 class LogsScreen extends ConsumerWidget {
   const LogsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(logsProvider);
+    // ...
     final notifier = ref.read(logsProvider.notifier);
 
     return Scaffold(
@@ -27,12 +30,15 @@ class LogsScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : state.logs.isEmpty
-              ? _EmptyState()
-              : ListView.separated(
-                  padding: const EdgeInsets.all(24),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(logsProvider.notifier).loadLogs(),
+        child: state.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : state.logs.isEmpty
+                ? _EmptyState()
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
                   itemCount: state.logs.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
@@ -40,6 +46,7 @@ class LogsScreen extends ConsumerWidget {
                     return _LogCard(log: log, index: state.logs.length - index);
                   },
                 ),
+      ),
     );
   }
 
@@ -71,7 +78,7 @@ class LogsScreen extends ConsumerWidget {
 }
 
 class _LogCard extends StatelessWidget {
-  final dynamic log;
+  final LocationEntity log;
   final int index;
 
   const _LogCard({required this.log, required this.index});
