@@ -31,11 +31,13 @@ class _LogDetailsScreenState extends ConsumerState<LogDetailsScreen> {
       final repository = ref.read(locationRepositoryProvider);
       final useCase = GetSessionLocationsUseCase(repository);
       final locations = await useCase(widget.sessionId);
+      if (!mounted) return;
       setState(() {
         _locations = locations;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;

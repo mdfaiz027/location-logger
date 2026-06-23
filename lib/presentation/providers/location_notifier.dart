@@ -94,6 +94,7 @@ class LocationNotifier extends StateNotifier<LocationState> {
       final totalPoints = await repository.getTotalPoints();
       final totalDistance = await repository.getLifetimeDistance();
 
+      if (!mounted) return;
       state = state.copyWith(
         isTracking: isTracking,
         lastLocation: last,

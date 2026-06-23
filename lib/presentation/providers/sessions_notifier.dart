@@ -36,8 +36,10 @@ class SessionsNotifier extends StateNotifier<SessionsState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final sessions = await getSessionsUseCase();
+      if (!mounted) return;
       state = state.copyWith(sessions: sessions, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }

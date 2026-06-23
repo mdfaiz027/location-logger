@@ -39,8 +39,10 @@ class LogsNotifier extends StateNotifier<LogsState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final logs = await getAllLogsUseCase();
+      if (!mounted) return;
       state = state.copyWith(logs: logs, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -49,8 +51,10 @@ class LogsNotifier extends StateNotifier<LogsState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await clearAllLogsUseCase();
+      if (!mounted) return;
       state = state.copyWith(logs: [], isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
