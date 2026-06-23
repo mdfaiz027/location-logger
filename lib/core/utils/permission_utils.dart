@@ -1,44 +1,44 @@
-import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 
 class PermissionUtils {
   static Future<bool> requestLocationPermissions() async {
-    // Request both "when in use" and "always" (for background)
-    final status = await Permission.location.request();
-    if (status.isDenied) {
-      // Try again
-      final secondStatus = await Permission.location.request();
-      if (secondStatus.isDenied) {
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
         return false;
       }
     }
 
-    // On Android, also request background location permission
-    if (await Permission.location.isGranted) {
-      final background = await Permission.locationAlways.request();
-      if (background.isDenied) {
-        // We can still track in foreground, but background may be limited
-        // For this app, we want background, so we'll return false if denied permanently.
-        if (background.isPermanentlyDenied) {
-          return false;
-        }
-        // If just denied, we can still proceed but will lack background.
-        // We'll return true but log a warning.
+    if (permission == LocationPermission.deniedForever) {
+      return false;
+    }
+
+    // If we have "whileInUse", we try to get "always" for background tracking
+    if (permission == LocationPermission.whileInUse) {
+      // On iOS, we can proceed with whileInUse, and the system might prompt for Always later
+      // or we can request it now. On Android 11+, Always must be requested separately.
+      
+      // For this app, we'll try to request Always but proceed even if we only have WhileInUse,
+      // as the foreground service works with WhileInUse.
+      final alwaysPermission = await Geolocator.requestPermission();
+      if (alwaysPermission == LocationPermission.always) {
         return true;
       }
+      
+      // We still return true because WhileInUse is enough to start the service
+      // (it will just be a foreground service).
       return true;
     }
-    return false;
+
+    return permission == LocationPermission.always || 
+           permission == LocationPermission.whileInUse;
   }
 
   static Future<bool> checkPermissions() async {
-    final status = await Permission.location.status;
-    if (status.isGranted) {
-      // Check always permission for iOS / background for Android
-      final always = await Permission.locationAlways.status;
-      // Actually we want always for background; if denied, we may still start but background won't work.
-      // For simplicity, we require always.
-      return always.isGranted;
-    }
-    return false;
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.always || 
+           permission == LocationPermission.whileInUse;
   }
 }

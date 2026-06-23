@@ -98,6 +98,11 @@ class LocationRepositoryImpl implements LocationRepository {
   Future<void> startTracking(String sessionId) async {
     if (_isTracking) return;
 
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception(AppStrings.permissionPermanentlyDenied);
+    }
+
     final hasPermission = await PermissionUtils.requestLocationPermissions();
     if (!hasPermission) {
       throw Exception(AppStrings.permissionDenied);
