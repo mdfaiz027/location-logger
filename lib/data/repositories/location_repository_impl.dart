@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -18,13 +19,18 @@ void onStart(ServiceInstance service) {
 
   String? currentSessionId;
   StreamSubscription<Position>? positionSubscription;
+  bool isAppInForeground = true;
+
+  final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
+      isAppInForeground = true;
       service.setAsForegroundService();
     });
 
     service.on('setAsBackground').listen((event) {
+      isAppInForeground = false;
       service.setAsBackgroundService();
     });
   }
@@ -40,18 +46,17 @@ void onStart(ServiceInstance service) {
 
     positionSubscription?.cancel();
 
-    // Use platform specific settings for better background performance
     late LocationSettings locationSettings;
-    if (service is AndroidServiceInstance) {
+    if (Platform.isAndroid) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.best,
-        distanceFilter: 0, // Set to 0 for better logging during testing
+        distanceFilter: 0,
         intervalDuration: const Duration(seconds: 5),
       );
     } else {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.best,
-        distanceFilter: 0, // Set to 0 for better logging during testing
+        distanceFilter: 0,
         pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: true,
         allowBackgroundLocationUpdates: true,
@@ -69,26 +74,30 @@ void onStart(ServiceInstance service) {
         );
         await db.insertLocation(model);
 
-        if (service is AndroidServiceInstance) {
-          if (await service.isForegroundService()) {
-            final points = await db.getLocationsBySession(currentSessionId!);
-            
-            FlutterLocalNotificationsPlugin().show(
-              888,
-              AppStrings.appName,
-              'Lat: ${position.latitude.toStringAsFixed(6)}, Lng: ${position.longitude.toStringAsFixed(6)} | Points: ${points.length}',
-              const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'location_tracking_channel',
-                  'Location Tracking',
-                  importance: Importance.high,
-                  priority: Priority.high,
-                  ongoing: true,
-                  icon: '@mipmap/ic_launcher',
-                ),
+        // Notify user if app is in background
+        if (!isAppInForeground) {
+          final points = await db.getLocationsBySession(currentSessionId!);
+          
+          notificationsPlugin.show(
+            888,
+            AppStrings.appName,
+            'Lat: ${position.latitude.toStringAsFixed(6)}, Lng: ${position.longitude.toStringAsFixed(6)} | Points: ${points.length}',
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'location_tracking_channel',
+                'Location Tracking',
+                importance: Importance.low,
+                priority: Priority.low,
+                ongoing: true,
+                icon: '@mipmap/ic_launcher',
               ),
-            );
-          }
+              iOS: DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: false,
+              ),
+            ),
+          );
         }
       },
     );
@@ -111,26 +120,27 @@ class LocationRepositoryImpl implements LocationRepository {
   Future<void> startTracking(String sessionId) async {
     if (_isTracking) return;
 
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception(AppStrings.permissionPermanentlyDenied);
-    }
-
     final hasPermission = await PermissionUtils.requestLocationPermissions();
     if (!hasPermission) {
       throw Exception(AppStrings.permissionDenied);
     }
 
+    // Request Notification Permissions specifically for iOS
+    if (Platform.isIOS) {
+      await _notifications
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    }
+
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       await Geolocator.openLocationSettings();
-      throw Exception('Location services are disabled. Please enable them and try again.');
+      throw Exception('Location services are disabled.');
     }
 
     await _initializeService();
     await _service.startService();
     
-    // Give it a moment to start then send the sessionId
     Timer(const Duration(seconds: 1), () {
       _service.invoke('startTracking', {'sessionId': sessionId});
     });
@@ -139,11 +149,19 @@ class LocationRepositoryImpl implements LocationRepository {
   }
 
   Future<void> _initializeService() async {
+    // Initialize for iOS
+    const initializationSettingsIOS = DarwinInitializationSettings();
+    const initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+    await _notifications.initialize(initializationSettings);
+
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'location_tracking_channel',
       'Location Tracking',
-      description: 'Shows that location tracking is active.',
-      importance: Importance.high,
+      importance: Importance.low,
       enableVibration: false,
       playSound: false,
     );
@@ -173,60 +191,41 @@ class LocationRepositoryImpl implements LocationRepository {
   @override
   Future<void> stopTracking() async {
     if (!_isTracking) return;
-
     _service.invoke('stopService');
     _isTracking = false;
     await _notifications.cancel(888);
   }
 
   @override
-  Future<void> saveLocation(LocationEntity location) async {
-    final model = LocationModel.fromEntity(location);
-    await datasource.insertLocation(model);
-  }
-
+  Future<void> saveLocation(LocationEntity location) async {}
   @override
   Future<List<LocationEntity>> getAllLocations() async {
     final models = await datasource.getAllLocations();
     return models.map((e) => e.toEntity()).toList();
   }
-
   @override
   Future<List<LocationEntity>> getLocationsBySession(String sessionId) async {
     final models = await datasource.getLocationsBySession(sessionId);
     return models.map((e) => e.toEntity()).toList();
   }
-
   @override
-  Future<void> clearAll() async {
-    await datasource.clearAll();
-  }
-
+  Future<void> clearAll() async => await datasource.clearAll();
   @override
-  Future<int> getTotalPoints() async {
-    return await datasource.countLocations();
-  }
-
+  Future<int> getTotalPoints() async => await datasource.countLocations();
   @override
   Future<LocationEntity?> getLastLocation() async {
     final model = await datasource.getLastLocation();
     return model?.toEntity();
   }
-
   @override
   Future<double> getTotalDistanceForSession(String sessionId) async {
     final entities = await getLocationsBySession(sessionId);
     if (entities.length < 2) return 0.0;
-
     double distance = 0.0;
     for (int i = 0; i < entities.length - 1; i++) {
-      final p1 = entities[i];
-      final p2 = entities[i + 1];
       distance += DistanceUtils.calculateDistance(
-        p1.latitude,
-        p1.longitude,
-        p2.latitude,
-        p2.longitude,
+        entities[i].latitude, entities[i].longitude,
+        entities[i+1].latitude, entities[i+1].longitude,
       );
     }
     return distance;
