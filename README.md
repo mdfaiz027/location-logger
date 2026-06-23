@@ -58,7 +58,17 @@ The app is built using **Clean Architecture** principles to ensure maintainabili
 
 3. **Platform Configuration**:
    - **Android**: Ensure `AndroidManifest.xml` has the required background location and foreground service permissions.
-   - **iOS**: Enable **Location updates** under Background Modes in Xcode. Ensure `Info.plist` has the necessary usage descriptions.
+   - **iOS**: 
+     - Open `ios/Runner.xcworkspace` in Xcode.
+     - Enable **Location updates** under **Background Modes** in the 'Signing & Capabilities' tab.
+     - Ensure `Info.plist` has the necessary usage descriptions for Location (Always and When In Use).
+     - Run `pod install` in the `ios` directory before building.
+
+### 🛠️ Troubleshooting (iOS)
+If you encounter `Module not found` errors in Xcode:
+1. Ensure you are opening the `.xcworkspace` file, not the `.xcodeproj`.
+2. Disable Swift Package Manager if prompted (this project is optimized for CocoaPods).
+3. Run `flutter clean` and then `flutter run`.
 
 4. **Run the application**:
    ```bash
