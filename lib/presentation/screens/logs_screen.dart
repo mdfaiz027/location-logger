@@ -2,50 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:location_logger_app/core/constants/app_colors.dart';
+import 'package:location_logger_app/core/utils/distance_utils.dart';
 import 'package:location_logger_app/presentation/providers/location_notifier.dart';
 import 'package:location_logger_app/presentation/providers/logs_notifier.dart';
+import 'package:location_logger_app/presentation/providers/sessions_notifier.dart';
 import 'package:intl/intl.dart';
 
-import '../../domain/entities/location_entity.dart';
+import '../../domain/entities/session_entity.dart';
 
 class LogsScreen extends ConsumerWidget {
   const LogsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(logsProvider);
-    // ...
-    final notifier = ref.read(logsProvider.notifier);
+    final state = ref.watch(sessionsProvider);
+    final logsNotifier = ref.read(logsProvider.notifier);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Journey Logs'),
         actions: [
-          if (state.logs.isNotEmpty)
+          if (state.sessions.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.error),
-              onPressed: () => _showClearConfirmation(context, ref, notifier),
+              onPressed: () => _showClearConfirmation(context, ref, logsNotifier),
             ),
           const SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(logsProvider.notifier).loadLogs(),
+        onRefresh: () => ref.read(sessionsProvider.notifier).loadSessions(),
         child: state.isLoading
             ? const Center(child: CircularProgressIndicator())
-            : state.logs.isEmpty
+            : state.sessions.isEmpty
                 ? _EmptyState()
                 : ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
-                  itemCount: state.logs.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final log = state.logs[state.logs.length - 1 - index]; // Show newest first
-                    return _LogCard(log: log, index: state.logs.length - index);
-                  },
-                ),
+                    itemCount: state.sessions.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final session = state.sessions[index];
+                      return _SessionCard(session: session);
+                    },
+                  ),
       ),
     );
   }
@@ -66,7 +67,8 @@ class LogsScreen extends ConsumerWidget {
             onPressed: () async {
               context.pop();
               await notifier.clearLogs();
-              // Refresh the dashboard stats after clearing logs
+              // Refresh both providers
+              ref.read(sessionsProvider.notifier).loadSessions();
               ref.read(locationProvider.notifier).refreshData();
             },
             child: const Text('Clear All', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
@@ -77,61 +79,78 @@ class LogsScreen extends ConsumerWidget {
   }
 }
 
-class _LogCard extends StatelessWidget {
-  final LocationEntity log;
-  final int index;
+class _SessionCard extends StatelessWidget {
+  final SessionEntity session;
 
-  const _LogCard({required this.log, required this.index});
+  const _SessionCard({required this.session});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: () => context.push('/logs/${session.id}'),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.route_rounded, color: AppColors.secondary, size: 24),
             ),
-            child: const Icon(Icons.location_on_rounded, color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('MMM d, yyyy').format(session.startTime),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${DateFormat('h:mm a').format(session.startTime)} - ${session.endTime != null ? DateFormat('h:mm a').format(session.endTime!) : "Active"}',
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${log.latitude.toStringAsFixed(6)}, ${log.longitude.toStringAsFixed(6)}',
+                  DistanceUtils.formatDistance(session.totalDistance),
                   style: const TextStyle(
-                    color: AppColors.textPrimary,
+                    color: AppColors.secondary,
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
                   ),
                 ),
-                const SizedBox(height: 4),
                 Text(
-                  DateFormat('MMM d, h:mm:ss a').format(log.timestamp),
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  '${session.pointsCount} pts',
+                  style: const TextStyle(
+                    color: AppColors.textLight,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
-          ),
-          Text(
-            '#$index',
-            style: const TextStyle(
-              color: AppColors.textLight,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
+          ],
+        ),
       ),
     );
   }

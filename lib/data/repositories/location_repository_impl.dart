@@ -6,6 +6,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../domain/entities/location_entity.dart';
+import '../../domain/entities/session_entity.dart';
 import '../../domain/repositories/location_repository.dart';
 import '../../core/utils/distance_utils.dart';
 import '../../core/utils/permission_utils.dart';
@@ -208,6 +209,27 @@ class LocationRepositoryImpl implements LocationRepository {
     final models = await datasource.getLocationsBySession(sessionId);
     return models.map((e) => e.toEntity()).toList();
   }
+
+  @override
+  Future<List<SessionEntity>> getAllSessions() async {
+    final metadata = await datasource.getSessionsMetadata();
+    List<SessionEntity> sessions = [];
+
+    for (var map in metadata) {
+      final sessionId = map['session_id'] as String;
+      final distance = await getTotalDistanceForSession(sessionId);
+      
+      sessions.add(SessionEntity(
+        id: sessionId,
+        startTime: DateTime.parse(map['start_time'] as String),
+        endTime: map['end_time'] != null ? DateTime.parse(map['end_time'] as String) : null,
+        pointsCount: map['points_count'] as int,
+        totalDistance: distance,
+      ));
+    }
+    return sessions;
+  }
+
   @override
   Future<void> clearAll() async => await datasource.clearAll();
   @override
@@ -229,5 +251,27 @@ class LocationRepositoryImpl implements LocationRepository {
       );
     }
     return distance;
+  }
+
+  @override
+  Future<double> getLifetimeDistance() async {
+    final entities = await getAllLocations();
+    if (entities.length < 2) return 0.0;
+
+    double totalDistance = 0.0;
+    for (int i = 0; i < entities.length - 1; i++) {
+      final p1 = entities[i];
+      final p2 = entities[i + 1];
+
+      // Only calculate distance if points belong to the same session
+      // to avoid jumps between separate journeys.
+      if (p1.sessionId == p2.sessionId) {
+        totalDistance += DistanceUtils.calculateDistance(
+          p1.latitude, p1.longitude,
+          p2.latitude, p2.longitude,
+        );
+      }
+    }
+    return totalDistance;
   }
 }

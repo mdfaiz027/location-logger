@@ -90,4 +90,18 @@ class LocationLocalDatasource {
     }
     return null;
   }
+
+  Future<List<Map<String, dynamic>>> getSessionsMetadata() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        session_id, 
+        MIN(timestamp) as start_time, 
+        MAX(timestamp) as end_time, 
+        COUNT(*) as points_count 
+      FROM $tableName 
+      GROUP BY session_id 
+      ORDER BY start_time DESC
+    ''');
+  }
 }
