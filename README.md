@@ -11,7 +11,10 @@
   - Animated pulse indicators for active tracking.
   - Responsive grid-based metric dashboard.
   - Clean, professional typography and layout.
-- **📜 Journey Logs**: Detailed history of all captured location points, ordered by time.
+- **📜 Journey Logs**:
+  - **Grouped Journeys**: Automatically groups location points into distinct "journeys" (tracked from Start to Stop).
+  - **Session Analytics**: View start/end times, total points, and precise distance for every specific journey.
+  - **Drill-down Details**: Tap on any journey to view the complete history of latitude and longitude coordinates captured during that trip.
 - **🛡️ Robust Permissions**: Graceful handling of location permissions and system service status.
 - **🗺️ Navigation**: Seamless screen transitions powered by `GoRouter`.
 
